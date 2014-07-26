@@ -1,0 +1,61 @@
+// electric imp device code
+server.log("Device Started");
+ 
+arduino <- hardware.uart57;
+//Port 5=TX	, Port 7=RX
+//remember: Arduino TX = Imp RX
+
+ 
+function arduinoData() {
+    local b = arduino.read();
+    while(b != -1) {
+        local state = "Unknown";
+        if (b == 0x10) state = "Off";
+        if (b == 0x11) state = "On"
+        server.log("LED: " + state);
+        b = arduino.read();
+        toggleRxLED();
+    }
+}
+ 
+arduino.configure(9600, 8, PARITY_NONE, 1, NO_CTSRTS, arduinoData);
+//****************
+local rxLEDToggle = 1;  //Yellow LED receiving pin8
+local txLEDToggle = 1;  //Red LED trnsmitting pin9
+function initLEDs(){
+    // LEDs are on pins 8 and 9 on the imp Shield
+    // They're both active low, so writing the pin a 1 will turn the LED off
+    hardware.pin8.configure(DIGITAL_OUT_OD_PULLUP);
+    hardware.pin9.configure(DIGITAL_OUT_OD_PULLUP);
+    hardware.pin8.write(1);
+    hardware.pin9.write(1);
+}
+function toggleTxLED(){
+    // This function turns an LED on/off quickly on pin 9.
+    // It first turns the LED on, then calls itself again in 50ms to turn the LED off
+    txLEDToggle = txLEDToggle?0:1;    // toggle the txLEDtoggle variable
+    if (!txLEDToggle)
+    {
+        imp.wakeup(0.01, toggleTxLED.bindenv(this)); // if we're turning the LED on, set a timer to call this function again (to turn the LED off)
+    }
+    hardware.pin9.write(txLEDToggle);  // TX LED is on pin 8 (active-low)
+}
+function toggleRxLED(){
+    // This function turns an LED on/off quickly on pin 8.
+    // It first turns the LED on, then calls itself again in 50ms to turn the LED off
+    rxLEDToggle = rxLEDToggle?0:1;    // toggle the rxLEDtoggle variable
+    if (!rxLEDToggle)
+    {
+        imp.wakeup(0.01, toggleRxLED.bindenv(this)); // if we're turning the LED on, set a timer to call this function again (to turn the LED off)
+    }
+    hardware.pin8.write(rxLEDToggle);   // RX LED is on pin 8 (active-low)
+}
+initLEDs();
+//**************** 
+ 
+function blink(state) {
+    server.log("Setting LED to: " + state);
+    arduino.write(state);
+    toggleTxLED();
+    imp.wakeup(1, function() { blink(1-state); });
+} blink(1);
